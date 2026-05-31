@@ -439,10 +439,10 @@ document.getElementById('videoFile').addEventListener('change', function() {
   if (prevMetaListener) videoEl.removeEventListener('loadedmetadata', prevMetaListener);
   prevMetaListener = function() {
     prevMetaListener = null;
-    canvas.width = Math.round(canvas.getBoundingClientRect().width);
-    canvas.height = Math.round(canvas.getBoundingClientRect().height);
     canvas.style.display = 'block';
     trimInfo.style.display = 'block';
+    canvas.width = Math.round(canvas.getBoundingClientRect().width);
+    canvas.height = Math.round(canvas.getBoundingClientRect().height);
     generateThumbnails();
   };
   videoEl.addEventListener('loadedmetadata', prevMetaListener, { once: true });
