@@ -77,68 +77,6 @@ def test_select_encoding_params_crf_mode_returns_warning():
     assert "warning" in params
 
 
-from app import encode_video
-
-
-def test_encode_video_calls_ffmpeg_two_pass_for_bitrate_mode(tmp_path):
-    output = str(tmp_path / "out.mp4")
-    calls = []
-
-    def fake_run(cmd, **kwargs):
-        calls.append(cmd)
-        m = MagicMock()
-        m.returncode = 0
-        return m
-
-    with patch("subprocess.run", side_effect=fake_run):
-        encode_video(
-            input_path="input.mp4",
-            output_path=output,
-            params={"mode": "bitrate", "bitrate": 500},
-            output_format="mp4",
-        )
-
-    assert len(calls) == 2
-    assert "-pass" in calls[0] and "1" in calls[0]
-    assert "-pass" in calls[1] and "2" in calls[1]
-
-
-def test_encode_video_calls_ffmpeg_single_pass_for_crf_mode(tmp_path):
-    output = str(tmp_path / "out.mp4")
-    calls = []
-
-    def fake_run(cmd, **kwargs):
-        calls.append(cmd)
-        m = MagicMock()
-        m.returncode = 0
-        return m
-
-    with patch("subprocess.run", side_effect=fake_run):
-        encode_video(
-            input_path="input.mp4",
-            output_path=output,
-            params={"mode": "crf", "crf": 23, "warning": "..."},
-            output_format="mp4",
-        )
-
-    assert len(calls) == 1
-    assert "-crf" in calls[0]
-
-
-def test_encode_video_raises_on_ffmpeg_failure(tmp_path):
-    output = str(tmp_path / "out.mp4")
-
-    with patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "ffmpeg", stderr="error")):
-        try:
-            encode_video(
-                input_path="input.mp4",
-                output_path=output,
-                params={"mode": "crf", "crf": 23},
-                output_format="mp4",
-            )
-            assert False, "expected RuntimeError"
-        except RuntimeError as e:
-            assert "ffmpeg" in str(e).lower()
 from app import app as flask_app
 import io
 

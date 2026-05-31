@@ -1,5 +1,7 @@
+import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -81,64 +83,22 @@ AUDIO_CODEC_MAP = {
 }
 
 
-def encode_video(
-    input_path: str,
-    output_path: str,
-    params: dict,
-    output_format: str,
-) -> None:
-    video_codec = CODEC_MAP[output_format]
-    audio_codec = AUDIO_CODEC_MAP[output_format]
+RESOLUTION_MAP = {
+    "1080p": 1080,
+    "720p": 720,
+    "480p": 480,
+    "360p": 360,
+}
 
-    try:
-        if params["mode"] == "bitrate":
-            passlogfile = os.path.join(tempfile.gettempdir(), "ffmpeg2pass")
-            pass1_format = "webm" if output_format == "webm" else "null"
+TIME_PATTERN = re.compile(r'^\d{1,2}:\d{2}:\d{2}$|^\d{2}:\d{2}$')
 
-            subprocess.run(
-                [
-                    "ffmpeg", "-y", "-i", input_path,
-                    "-c:v", video_codec,
-                    "-b:v", f"{params['bitrate']}k",
-                    "-pass", "1", "-passlogfile", passlogfile,
-                    "-an", "-f", pass1_format, os.devnull,
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            subprocess.run(
-                [
-                    "ffmpeg", "-y", "-i", input_path,
-                    "-c:v", video_codec,
-                    "-b:v", f"{params['bitrate']}k",
-                    "-pass", "2", "-passlogfile", passlogfile,
-                    "-c:a", audio_codec, "-b:a", "128k",
-                    output_path,
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
 
-        else:  # CRF mode
-            subprocess.run(
-                [
-                    "ffmpeg", "-y", "-i", input_path,
-                    "-c:v", video_codec,
-                    "-crf", str(params["crf"]),
-                    "-c:a", audio_codec, "-b:a", "128k",
-                    output_path,
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
+def _time_to_seconds(t: str) -> float:
+    parts = t.split(":")
+    if len(parts) == 2:
+        return int(parts[0]) * 60 + int(parts[1])
+    return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
 
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"ffmpeg encoding failed: {e.stderr}") from e
-    except FileNotFoundError:
-        raise RuntimeError("ffmpeg not found — install FFmpeg and add it to PATH")
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="tr">
@@ -299,7 +259,7 @@ def compress():
 
         warning = params.get("warning", "")
         response = send_file(
-            __import__("io").BytesIO(file_bytes),
+            io.BytesIO(file_bytes),
             as_attachment=True,
             download_name=output_filename,
             mimetype="application/octet-stream",
