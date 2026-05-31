@@ -52,7 +52,6 @@ def select_encoding_params(
     min_crf: int,
     output_format: str,
 ) -> dict:
-    import math
     crf_floor_kbps = int(150 * (2 ** ((51 - min_crf) / 8)))
 
     if video_bitrate_kbps >= crf_floor_kbps:
