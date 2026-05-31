@@ -152,6 +152,64 @@ def validate_process_params(form) -> tuple[dict, str]:
     return params, ""
 
 
+def build_ffmpeg_args(
+    input_path: str,
+    output_path: str,
+    params: dict,
+    video_duration: float,
+) -> tuple[list[list[str]], str]:
+    output_format = params["output_format"]
+    video_codec = CODEC_MAP[output_format]
+    audio_codec = AUDIO_CODEC_MAP[output_format]
+
+    start_secs = _time_to_seconds(params["start_time"]) if params["start_time"] else 0.0
+    end_secs = _time_to_seconds(params["end_time"]) if params["end_time"] else video_duration
+    effective_duration = max(end_secs - start_secs, 1.0)
+
+    video_bitrate = calculate_video_bitrate(params["target_mb"], effective_duration)
+    enc = select_encoding_params(video_bitrate, params["min_crf"], output_format)
+    warning = enc.get("warning", "")
+
+    seek_args = []
+    if params["start_time"]:
+        seek_args += ["-ss", params["start_time"]]
+
+    trim_args = []
+    if params["start_time"] or params["end_time"]:
+        trim_args = ["-t", str(effective_duration)]
+
+    vf_args = []
+    if params["resolution"] in RESOLUTION_MAP:
+        height = RESOLUTION_MAP[params["resolution"]]
+        vf_args = ["-vf", f"scale=-2:{height}"]
+
+    if params["mute"]:
+        audio_args = ["-an"]
+    else:
+        audio_args = ["-c:a", audio_codec, "-b:a", "128k"]
+        if params["volume"] != 100:
+            audio_args += ["-af", f"volume={params['volume'] / 100:.2f}"]
+
+    passlogfile = os.path.join(tempfile.gettempdir(), "ffmpeg2pass")
+    pass1_fmt = "webm" if output_format == "webm" else "null"
+
+    def base_cmd():
+        return ["ffmpeg", "-y"] + seek_args + ["-i", input_path] + trim_args + ["-c:v", video_codec]
+
+    if enc["mode"] == "bitrate":
+        pass1 = base_cmd() + ["-b:v", f"{enc['bitrate']}k"] + vf_args + [
+            "-pass", "1", "-passlogfile", passlogfile,
+            "-an", "-f", pass1_fmt, os.devnull,
+        ]
+        pass2 = base_cmd() + ["-b:v", f"{enc['bitrate']}k"] + vf_args + [
+            "-pass", "2", "-passlogfile", passlogfile,
+        ] + audio_args + [output_path]
+        return [pass1, pass2], warning
+    else:
+        cmd = base_cmd() + ["-crf", str(enc["crf"])] + vf_args + audio_args + [output_path]
+        return [cmd], warning
+
+
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="tr">
 <head>

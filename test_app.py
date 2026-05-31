@@ -171,3 +171,71 @@ def test_validate_mute_checkbox_on():
     params, err = validate_process_params(form)
     assert err == ""
     assert params["mute"] is True
+
+
+from app import build_ffmpeg_args
+
+BASE_PARAMS = {
+    "start_time": "",
+    "end_time": "",
+    "resolution": "original",
+    "mute": False,
+    "volume": 100,
+    "target_mb": 50.0,
+    "min_crf": 23,
+    "output_format": "mp4",
+}
+
+
+def test_build_ffmpeg_args_crf_mode_returns_one_command():
+    params = {**BASE_PARAMS, "min_crf": 0}
+    commands, _ = build_ffmpeg_args("in.mp4", "out.mp4", params, 60.0)
+    assert len(commands) == 1
+    assert "-crf" in commands[0]
+
+
+def test_build_ffmpeg_args_bitrate_mode_returns_two_commands():
+    params = {**BASE_PARAMS, "min_crf": 51}
+    commands, _ = build_ffmpeg_args("in.mp4", "out.mp4", params, 60.0)
+    assert len(commands) == 2
+    assert "-pass" in commands[0] and "1" in commands[0]
+    assert "-pass" in commands[1] and "2" in commands[1]
+
+
+def test_build_ffmpeg_args_trim_adds_ss_and_t():
+    params = {**BASE_PARAMS, "start_time": "00:00:30", "end_time": "00:01:00"}
+    commands, _ = build_ffmpeg_args("in.mp4", "out.mp4", params, 120.0)
+    first_cmd = commands[0]
+    assert "-ss" in first_cmd
+    assert "00:00:30" in first_cmd
+    assert "-t" in first_cmd
+    assert "30.0" in first_cmd or "30" in first_cmd
+
+
+def test_build_ffmpeg_args_resolution_adds_vf_scale():
+    params = {**BASE_PARAMS, "resolution": "720p", "min_crf": 51}
+    commands, _ = build_ffmpeg_args("in.mp4", "out.mp4", params, 60.0)
+    all_args = " ".join(commands[-1])
+    assert "scale=-2:720" in all_args
+
+
+def test_build_ffmpeg_args_mute_adds_an():
+    params = {**BASE_PARAMS, "mute": True, "min_crf": 51}
+    commands, _ = build_ffmpeg_args("in.mp4", "out.mp4", params, 60.0)
+    last_cmd = commands[-1]
+    assert "-an" in last_cmd
+    assert "-c:a" not in last_cmd
+
+
+def test_build_ffmpeg_args_volume_adds_af():
+    params = {**BASE_PARAMS, "volume": 150, "min_crf": 51}
+    commands, _ = build_ffmpeg_args("in.mp4", "out.mp4", params, 60.0)
+    all_args = " ".join(commands[-1])
+    assert "volume=1.50" in all_args
+
+
+def test_build_ffmpeg_args_default_volume_no_af():
+    params = {**BASE_PARAMS, "volume": 100, "min_crf": 51}
+    commands, _ = build_ffmpeg_args("in.mp4", "out.mp4", params, 60.0)
+    all_args = " ".join(commands[-1])
+    assert "volume=" not in all_args
