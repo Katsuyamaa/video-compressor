@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 
 from flask import Flask, render_template_string, request, send_file, jsonify
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024 * 1024  # 4 GB upload limit
@@ -268,11 +269,17 @@ def compress():
     except ValueError:
         return jsonify({"error": "Geçersiz boyut veya kalite değeri"}), 400
 
+    if target_mb <= 0:
+        return jsonify({"error": "Hedef boyut 0'dan büyük olmalı"}), 400
+    if not 0 <= min_crf <= 51:
+        return jsonify({"error": "CRF değeri 0-51 arasında olmalı"}), 400
+
     video_file = request.files["video"]
+    safe_name = secure_filename(video_file.filename) or "input.mp4"
     tmp_dir = tempfile.mkdtemp()
 
     try:
-        input_path = os.path.join(tmp_dir, "input_" + video_file.filename)
+        input_path = os.path.join(tmp_dir, "input_" + safe_name)
         video_file.save(input_path)
 
         info = get_video_info(input_path)
@@ -281,16 +288,21 @@ def compress():
         video_bitrate = calculate_video_bitrate(target_mb, duration)
         params = select_encoding_params(video_bitrate, min_crf, output_format)
 
-        output_filename = os.path.splitext(video_file.filename)[0] + f"_compressed.{output_format}"
+        stem = os.path.splitext(safe_name)[0]
+        output_filename = f"{stem}_compressed.{output_format}"
         output_path = os.path.join(tmp_dir, output_filename)
 
         encode_video(input_path, output_path, params, output_format)
 
+        with open(output_path, "rb") as f:
+            file_bytes = f.read()
+
         warning = params.get("warning", "")
         response = send_file(
-            output_path,
+            __import__("io").BytesIO(file_bytes),
             as_attachment=True,
             download_name=output_filename,
+            mimetype="application/octet-stream",
         )
         if warning:
             response.headers["X-Warning"] = warning
