@@ -215,47 +215,94 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Video Sıkıştırıcı</title>
+<title>Video İşleyici</title>
 <style>
   * { box-sizing: border-box; }
-  body { font-family: system-ui, sans-serif; max-width: 560px; margin: 48px auto; padding: 0 20px; color: #1a1a1a; }
+  body { font-family: system-ui, sans-serif; max-width: 580px; margin: 48px auto; padding: 0 20px; color: #1a1a1a; }
   h1 { font-size: 1.5rem; margin-bottom: 24px; }
-  .group { margin-bottom: 18px; }
+  .section-title { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; margin: 20px 0 10px; border-top: 1px solid #e5e7eb; padding-top: 16px; }
+  .group { margin-bottom: 14px; }
+  .row { display: flex; gap: 12px; }
+  .row .group { flex: 1; }
   label { display: block; font-size: 0.875rem; font-weight: 600; margin-bottom: 6px; }
-  input[type=file], input[type=number], select {
+  input[type=file], input[type=number], input[type=text], select {
     width: 100%; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 6px;
     font-size: 0.9rem; background: #fff;
   }
   input[type=range] { width: 100%; accent-color: #2563eb; }
-  .crf-labels { display: flex; justify-content: space-between; font-size: 0.75rem; color: #6b7280; margin-top: 2px; }
+  input[type=checkbox] { width: 16px; height: 16px; margin-right: 6px; cursor: pointer; accent-color: #2563eb; }
+  .check-label { display: flex; align-items: center; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+  .scale-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: #6b7280; margin-top: 2px; }
   button {
     width: 100%; padding: 12px; background: #2563eb; color: #fff;
     border: none; border-radius: 6px; font-size: 1rem; font-weight: 600;
-    cursor: pointer; transition: background 0.2s;
+    cursor: pointer; transition: background 0.2s; margin-top: 8px;
   }
   button:hover:not(:disabled) { background: #1d4ed8; }
   button:disabled { background: #93c5fd; cursor: not-allowed; }
   .status { text-align: center; margin-top: 14px; font-size: 0.9rem; color: #4b5563; display: none; }
   .warning { background: #fef9c3; border: 1px solid #fbbf24; border-radius: 6px; padding: 12px; margin-top: 16px; font-size: 0.875rem; }
   .error-box { background: #fee2e2; border: 1px solid #f87171; border-radius: 6px; padding: 12px; margin-top: 16px; font-size: 0.875rem; }
+  .dimmed { opacity: 0.4; pointer-events: none; }
 </style>
 </head>
 <body>
-<h1>Video Sıkıştırıcı</h1>
+<h1>Video İşleyici</h1>
 <form id="form">
+
   <div class="group">
     <label>Video Dosyası</label>
     <input type="file" id="video" accept="video/*" required>
   </div>
+
+  <div class="section-title">Kırpma</div>
+  <div class="row">
+    <div class="group">
+      <label>Başlangıç</label>
+      <input type="text" id="start_time" placeholder="00:00:00">
+    </div>
+    <div class="group">
+      <label>Bitiş</label>
+      <input type="text" id="end_time" placeholder="00:00:00">
+    </div>
+  </div>
+
+  <div class="section-title">Görüntü</div>
+  <div class="group">
+    <label>Çözünürlük</label>
+    <select id="resolution">
+      <option value="original">Orijinal</option>
+      <option value="1080p">1080p</option>
+      <option value="720p">720p</option>
+      <option value="480p">480p</option>
+      <option value="360p">360p</option>
+    </select>
+  </div>
+
+  <div class="section-title">Ses</div>
+  <div class="group">
+    <label class="check-label">
+      <input type="checkbox" id="mute" onchange="toggleVol(this.checked)">
+      Sesi kapat (mute)
+    </label>
+  </div>
+  <div class="group" id="volGroup">
+    <label>Ses Seviyesi: <span id="volVal">100</span>%</label>
+    <input type="range" id="volume" min="0" max="200" value="100"
+           oninput="document.getElementById('volVal').textContent=this.value">
+    <div class="scale-labels"><span>0%</span><span>Orijinal (100%)</span><span>200%</span></div>
+  </div>
+
+  <div class="section-title">Sıkıştırma</div>
   <div class="group">
     <label>Hedef Boyut (MB)</label>
     <input type="number" id="target_mb" min="1" step="0.1" value="50" required>
   </div>
   <div class="group">
-    <label>Minimum Kalite Eşiği — CRF: <span id="crfVal">23</span></label>
+    <label>Minimum Kalite — CRF: <span id="crfVal">23</span></label>
     <input type="range" id="min_crf" min="0" max="51" value="23"
            oninput="document.getElementById('crfVal').textContent=this.value">
-    <div class="crf-labels"><span>En iyi kalite (0)</span><span>En küçük dosya (51)</span></div>
+    <div class="scale-labels"><span>En iyi kalite (0)</span><span>En küçük dosya (51)</span></div>
   </div>
   <div class="group">
     <label>Çıktı Formatı</label>
@@ -265,12 +312,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <option value="webm">WebM</option>
     </select>
   </div>
-  <button type="submit" id="btn">Sıkıştır ve İndir</button>
+
+  <button type="submit" id="btn">İşle ve İndir</button>
 </form>
-<p class="status" id="status">Sıkıştırılıyor, lütfen bekleyin...</p>
+<p class="status" id="status">İşleniyor, lütfen bekleyin...</p>
 <div id="msg"></div>
 
 <script>
+function toggleVol(muted) {
+  document.getElementById('volGroup').classList.toggle('dimmed', muted);
+}
+
 document.getElementById('form').onsubmit = async function(e) {
   e.preventDefault();
   const btn = document.getElementById('btn');
@@ -282,17 +334,20 @@ document.getElementById('form').onsubmit = async function(e) {
 
   const fd = new FormData();
   fd.append('video', document.getElementById('video').files[0]);
+  fd.append('start_time', document.getElementById('start_time').value);
+  fd.append('end_time', document.getElementById('end_time').value);
+  fd.append('resolution', document.getElementById('resolution').value);
+  if (document.getElementById('mute').checked) fd.append('mute', 'on');
+  fd.append('volume', document.getElementById('volume').value);
   fd.append('target_mb', document.getElementById('target_mb').value);
   fd.append('min_crf', document.getElementById('min_crf').value);
   fd.append('output_format', document.getElementById('output_format').value);
 
   try {
-    const res = await fetch('/compress', {method: 'POST', body: fd});
-    if (res.ok && res.headers.get('Content-Type') !== 'application/json') {
+    const res = await fetch('/process', {method: 'POST', body: fd});
+    if (res.ok && !res.headers.get('Content-Type').includes('application/json')) {
       const warning = res.headers.get('X-Warning');
-      if (warning) {
-        msg.innerHTML = '<div class="warning">' + warning + '</div>';
-      }
+      if (warning) msg.innerHTML = '<div class="warning">' + warning + '</div>';
       const blob = await res.blob();
       const disp = res.headers.get('Content-Disposition') || '';
       const match = disp.match(/filename="?([^"]+)"?/);
@@ -322,25 +377,14 @@ def index():
     return render_template_string(HTML_TEMPLATE)
 
 
-@app.route("/compress", methods=["POST"])
-def compress():
+@app.route("/process", methods=["POST"])
+def process():
     if "video" not in request.files or request.files["video"].filename == "":
         return jsonify({"error": "Video dosyası seçilmedi"}), 400
 
-    output_format = request.form.get("output_format", "mp4").lower()
-    if output_format not in ALLOWED_FORMATS:
-        return jsonify({"error": f"Geçersiz format: {output_format}"}), 400
-
-    try:
-        target_mb = float(request.form.get("target_mb", 50))
-        min_crf = int(request.form.get("min_crf", 23))
-    except ValueError:
-        return jsonify({"error": "Geçersiz boyut veya kalite değeri"}), 400
-
-    if target_mb <= 0:
-        return jsonify({"error": "Hedef boyut 0'dan büyük olmalı"}), 400
-    if not 0 <= min_crf <= 51:
-        return jsonify({"error": "CRF değeri 0-51 arasında olmalı"}), 400
+    params, err = validate_process_params(request.form)
+    if err:
+        return jsonify({"error": err}), 400
 
     video_file = request.files["video"]
     safe_name = secure_filename(video_file.filename) or "input.mp4"
@@ -350,22 +394,25 @@ def compress():
         input_path = os.path.join(tmp_dir, "input_" + safe_name)
         video_file.save(input_path)
 
-        info = get_video_info(input_path)
-        duration = info["duration"]
-
-        video_bitrate = calculate_video_bitrate(target_mb, duration)
-        params = select_encoding_params(video_bitrate, min_crf, output_format)
+        video_info = get_video_info(input_path)
 
         stem = os.path.splitext(safe_name)[0]
-        output_filename = f"{stem}_compressed.{output_format}"
+        output_filename = f"{stem}_processed.{params['output_format']}"
         output_path = os.path.join(tmp_dir, output_filename)
 
-        encode_video(input_path, output_path, params, output_format)
+        commands, warning = build_ffmpeg_args(input_path, output_path, params, video_info["duration"])
+
+        for cmd in commands:
+            try:
+                subprocess.run(cmd, capture_output=True, text=True, check=True)
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(f"ffmpeg başarısız oldu: {e.stderr}") from e
+            except FileNotFoundError:
+                raise RuntimeError("ffmpeg bulunamadı — FFmpeg'i kurun ve PATH'e ekleyin")
 
         with open(output_path, "rb") as f:
             file_bytes = f.read()
 
-        warning = params.get("warning", "")
         response = send_file(
             io.BytesIO(file_bytes),
             as_attachment=True,

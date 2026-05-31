@@ -88,24 +88,48 @@ def test_index_returns_200():
     assert b"Video" in response.data
 
 
-def test_compress_missing_file_returns_400():
+def test_process_missing_file_returns_400():
     with flask_app.test_client() as client:
-        response = client.post("/compress", data={
+        response = client.post("/process", data={
             "target_mb": "10",
             "min_crf": "23",
             "output_format": "mp4",
+            "resolution": "original",
+            "volume": "100",
+            "start_time": "",
+            "end_time": "",
         })
     assert response.status_code == 400
 
 
-def test_compress_invalid_format_returns_400():
+def test_process_invalid_format_returns_400():
     video_bytes = io.BytesIO(b"fake video content")
     with flask_app.test_client() as client:
-        response = client.post("/compress", data={
+        response = client.post("/process", data={
             "video": (video_bytes, "test.mp4"),
             "target_mb": "10",
             "min_crf": "23",
             "output_format": "avi",
+            "resolution": "original",
+            "volume": "100",
+            "start_time": "",
+            "end_time": "",
+        })
+    assert response.status_code == 400
+
+
+def test_process_invalid_crf_returns_400():
+    video_bytes = io.BytesIO(b"fake video content")
+    with flask_app.test_client() as client:
+        response = client.post("/process", data={
+            "video": (video_bytes, "test.mp4"),
+            "target_mb": "10",
+            "min_crf": "99",
+            "output_format": "mp4",
+            "resolution": "original",
+            "volume": "100",
+            "start_time": "",
+            "end_time": "",
         })
     assert response.status_code == 400
 
