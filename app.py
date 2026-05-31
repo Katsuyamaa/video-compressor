@@ -66,3 +66,75 @@ def select_encoding_params(
                 f"Çıktı dosyası hedeften büyük olabilir."
             ),
         }
+
+
+CODEC_MAP = {
+    "mp4": "libx264",
+    "mkv": "libx264",
+    "webm": "libvpx-vp9",
+}
+AUDIO_CODEC_MAP = {
+    "mp4": "aac",
+    "mkv": "aac",
+    "webm": "libopus",
+}
+
+
+def encode_video(
+    input_path: str,
+    output_path: str,
+    params: dict,
+    output_format: str,
+) -> None:
+    video_codec = CODEC_MAP[output_format]
+    audio_codec = AUDIO_CODEC_MAP[output_format]
+
+    try:
+        if params["mode"] == "bitrate":
+            passlogfile = os.path.join(tempfile.gettempdir(), "ffmpeg2pass")
+            pass1_format = "webm" if output_format == "webm" else "null"
+
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-i", input_path,
+                    "-c:v", video_codec,
+                    "-b:v", f"{params['bitrate']}k",
+                    "-pass", "1", "-passlogfile", passlogfile,
+                    "-an", "-f", pass1_format, os.devnull,
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-i", input_path,
+                    "-c:v", video_codec,
+                    "-b:v", f"{params['bitrate']}k",
+                    "-pass", "2", "-passlogfile", passlogfile,
+                    "-c:a", audio_codec, "-b:a", "128k",
+                    output_path,
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+        else:  # CRF mode
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-i", input_path,
+                    "-c:v", video_codec,
+                    "-crf", str(params["crf"]),
+                    "-c:a", audio_codec, "-b:a", "128k",
+                    output_path,
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"ffmpeg encoding failed: {e.stderr}") from e
+    except FileNotFoundError:
+        raise RuntimeError("ffmpeg not found — install FFmpeg and add it to PATH")
