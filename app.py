@@ -324,6 +324,7 @@ let endPct = 1;
 let dragging = null;
 let thumbImgData = null;
 let prevObjectURL = null;
+let prevMetaListener = null;
 
 const THUMB_COUNT = 20;
 const HANDLE_R = 10;
@@ -392,6 +393,12 @@ function generateThumbnails() {
   const cw = canvas.width;
   const ch = canvas.height;
   const dur = videoEl.duration;
+  if (!isFinite(dur) || dur <= 0) {
+    drawHandles();
+    updateInfoBar();
+    updateHiddenInputs();
+    return;
+  }
   const fw = cw / THUMB_COUNT;
   let i = 0;
   thumbImgData = null;
@@ -429,13 +436,16 @@ document.getElementById('videoFile').addEventListener('change', function() {
   videoEl.src = prevObjectURL;
   videoEl.style.display = 'block';
 
-  videoEl.addEventListener('loadedmetadata', function onMeta() {
-    videoEl.removeEventListener('loadedmetadata', onMeta);
+  if (prevMetaListener) videoEl.removeEventListener('loadedmetadata', prevMetaListener);
+  prevMetaListener = function() {
+    prevMetaListener = null;
     canvas.width = Math.round(canvas.getBoundingClientRect().width);
+    canvas.height = Math.round(canvas.getBoundingClientRect().height);
     canvas.style.display = 'block';
     trimInfo.style.display = 'block';
     generateThumbnails();
-  });
+  };
+  videoEl.addEventListener('loadedmetadata', prevMetaListener, { once: true });
 });
 
 // ── Drag ───────────────────────────────────────────────────────────────────
