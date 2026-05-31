@@ -108,3 +108,66 @@ def test_compress_invalid_format_returns_400():
             "output_format": "avi",
         })
     assert response.status_code == 400
+
+
+from app import validate_process_params
+
+VALID_FORM = {
+    "start_time": "",
+    "end_time": "",
+    "resolution": "original",
+    "volume": "100",
+    "target_mb": "50",
+    "min_crf": "23",
+    "output_format": "mp4",
+}
+
+
+def test_validate_valid_params_returns_no_error():
+    params, err = validate_process_params(VALID_FORM)
+    assert err == ""
+    assert params["target_mb"] == 50.0
+    assert params["min_crf"] == 23
+    assert params["output_format"] == "mp4"
+    assert params["mute"] is False
+    assert params["volume"] == 100
+    assert params["resolution"] == "original"
+
+
+def test_validate_invalid_start_time_format():
+    form = {**VALID_FORM, "start_time": "1234"}
+    _, err = validate_process_params(form)
+    assert err != ""
+    assert "başlangıç" in err.lower() or "zaman" in err.lower()
+
+
+def test_validate_end_before_start():
+    form = {**VALID_FORM, "start_time": "00:01:00", "end_time": "00:00:30"}
+    _, err = validate_process_params(form)
+    assert err != ""
+    assert "bitiş" in err.lower() or "başlangıç" in err.lower()
+
+
+def test_validate_invalid_resolution():
+    form = {**VALID_FORM, "resolution": "8k"}
+    _, err = validate_process_params(form)
+    assert err != ""
+
+
+def test_validate_volume_out_of_range():
+    form = {**VALID_FORM, "volume": "300"}
+    _, err = validate_process_params(form)
+    assert err != ""
+
+
+def test_validate_invalid_crf():
+    form = {**VALID_FORM, "min_crf": "99"}
+    _, err = validate_process_params(form)
+    assert err != ""
+
+
+def test_validate_mute_checkbox_on():
+    form = {**VALID_FORM, "mute": "on"}
+    params, err = validate_process_params(form)
+    assert err == ""
+    assert params["mute"] is True

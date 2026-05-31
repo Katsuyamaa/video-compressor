@@ -100,6 +100,58 @@ def _time_to_seconds(t: str) -> float:
     return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
 
 
+ALLOWED_FORMATS = {"mp4", "mkv", "webm"}
+
+
+def validate_process_params(form) -> tuple[dict, str]:
+    params = {}
+
+    start_time = (form.get("start_time") or "").strip()
+    end_time = (form.get("end_time") or "").strip()
+    if start_time and not TIME_PATTERN.match(start_time):
+        return {}, "Geçersiz başlangıç zamanı formatı (ÖR: 00:01:30)"
+    if end_time and not TIME_PATTERN.match(end_time):
+        return {}, "Geçersiz bitiş zamanı formatı (ÖR: 00:02:00)"
+    if start_time and end_time and _time_to_seconds(end_time) <= _time_to_seconds(start_time):
+        return {}, "Bitiş zamanı başlangıç zamanından büyük olmalı"
+    params["start_time"] = start_time
+    params["end_time"] = end_time
+
+    resolution = form.get("resolution", "original")
+    if resolution not in ("original", "1080p", "720p", "480p", "360p"):
+        return {}, f"Geçersiz çözünürlük: {resolution}"
+    params["resolution"] = resolution
+
+    params["mute"] = form.get("mute") == "on"
+
+    try:
+        volume = int(form.get("volume", 100))
+    except (ValueError, TypeError):
+        return {}, "Geçersiz ses seviyesi"
+    if not 0 <= volume <= 200:
+        return {}, "Ses seviyesi 0-200 arasında olmalı"
+    params["volume"] = volume
+
+    try:
+        target_mb = float(form.get("target_mb", 50))
+        min_crf = int(form.get("min_crf", 23))
+    except (ValueError, TypeError):
+        return {}, "Geçersiz boyut veya kalite değeri"
+    if target_mb <= 0:
+        return {}, "Hedef boyut 0'dan büyük olmalı"
+    if not 0 <= min_crf <= 51:
+        return {}, "CRF değeri 0-51 arasında olmalı"
+    params["target_mb"] = target_mb
+    params["min_crf"] = min_crf
+
+    output_format = (form.get("output_format") or "mp4").lower()
+    if output_format not in ALLOWED_FORMATS:
+        return {}, f"Geçersiz format: {output_format}"
+    params["output_format"] = output_format
+
+    return params, ""
+
+
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -205,8 +257,6 @@ document.getElementById('form').onsubmit = async function(e) {
 </script>
 </body>
 </html>"""
-
-ALLOWED_FORMATS = {"mp4", "mkv", "webm"}
 
 
 @app.route("/")
