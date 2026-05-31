@@ -139,3 +139,34 @@ def test_encode_video_raises_on_ffmpeg_failure(tmp_path):
             assert False, "expected RuntimeError"
         except RuntimeError as e:
             assert "ffmpeg" in str(e).lower()
+from app import app as flask_app
+import io
+
+
+def test_index_returns_200():
+    with flask_app.test_client() as client:
+        response = client.get("/")
+    assert response.status_code == 200
+    assert b"Video" in response.data
+
+
+def test_compress_missing_file_returns_400():
+    with flask_app.test_client() as client:
+        response = client.post("/compress", data={
+            "target_mb": "10",
+            "min_crf": "23",
+            "output_format": "mp4",
+        })
+    assert response.status_code == 400
+
+
+def test_compress_invalid_format_returns_400():
+    video_bytes = io.BytesIO(b"fake video content")
+    with flask_app.test_client() as client:
+        response = client.post("/compress", data={
+            "video": (video_bytes, "test.mp4"),
+            "target_mb": "10",
+            "min_crf": "23",
+            "output_format": "avi",
+        })
+    assert response.status_code == 400
