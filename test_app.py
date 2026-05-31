@@ -28,3 +28,12 @@ def test_get_video_info_raises_on_ffprobe_failure():
             assert False, "expected RuntimeError"
         except RuntimeError as e:
             assert "ffprobe" in str(e).lower()
+
+
+def test_get_video_info_raises_when_ffprobe_not_found():
+    with patch("subprocess.run", side_effect=FileNotFoundError()):
+        try:
+            get_video_info("fake.mp4")
+            assert False, "expected RuntimeError"
+        except RuntimeError as e:
+            assert "ffprobe" in str(e).lower()
