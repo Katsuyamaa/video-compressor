@@ -424,6 +424,50 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     font-size: 0.85rem;
     color: #991b1b;
   }
+
+  #progressWrap { display: none; margin-top: 20px; }
+  .progress-track {
+    width: 100%;
+    height: 7px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: #3b82f6;
+    border-radius: 999px;
+    transition: width 90s cubic-bezier(0.08, 0, 0.15, 1);
+  }
+  .progress-fill.done {
+    background: #22c55e;
+    transition: width 0.35s ease, background 0.35s ease;
+  }
+  .progress-fill.error {
+    background: #ef4444;
+    transition: width 0.2s ease, background 0.2s ease;
+  }
+  #progressText {
+    margin-top: 10px;
+    font-size: 0.85rem;
+    color: #64748b;
+    text-align: center;
+  }
+  .success-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 14px;
+    font-size: 0.875rem;
+    color: #166534;
+    font-weight: 500;
+  }
+  .success-banner svg { flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -509,7 +553,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
 
   </form>
-  <p class="status" id="status">İşleniyor, lütfen bekleyin…</p>
+  <div id="progressWrap">
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <p id="progressText">İşleniyor…</p>
+  </div>
   <div id="msg"></div>
   </div>
 </div>
@@ -677,15 +724,43 @@ function toggleVol(muted) {
   document.getElementById('volGroup').classList.toggle('dimmed', muted);
 }
 
+// ── Progress helpers ───────────────────────────────────────────────────────
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressText = document.getElementById('progressText');
+
+function startProgress() {
+  progressFill.style.transition = 'none';
+  progressFill.style.width = '0%';
+  progressFill.classList.remove('done', 'error');
+  progressText.textContent = 'İşleniyor…';
+  progressWrap.style.display = 'block';
+  progressFill.getBoundingClientRect(); // force reflow
+  progressFill.style.transition = '';
+  progressFill.style.width = '88%';
+}
+
+function finishProgress(ok, text) {
+  progressFill.classList.add(ok ? 'done' : 'error');
+  progressFill.style.width = '100%';
+  progressText.textContent = text;
+}
+
+function resetProgress() {
+  progressWrap.style.display = 'none';
+  progressFill.style.transition = 'none';
+  progressFill.style.width = '0%';
+  progressFill.classList.remove('done', 'error');
+}
+
 // ── Form submit ────────────────────────────────────────────────────────────
 document.getElementById('form').onsubmit = async function(e) {
   e.preventDefault();
   const btn = document.getElementById('btn');
-  const status = document.getElementById('status');
   const msg = document.getElementById('msg');
   msg.innerHTML = '';
   btn.disabled = true;
-  status.style.display = 'block';
+  startProgress();
 
   const fd = new FormData();
   fd.append('video',         document.getElementById('videoFile').files[0]);
@@ -702,24 +777,28 @@ document.getElementById('form').onsubmit = async function(e) {
     const res = await fetch('/process', {method: 'POST', body: fd});
     if (res.ok && !res.headers.get('Content-Type').includes('application/json')) {
       const warning = res.headers.get('X-Warning');
-      if (warning) msg.innerHTML = '<div class="warning">' + warning + '</div>';
       const blob = await res.blob();
       const disp = res.headers.get('Content-Disposition') || '';
       const match = disp.match(/filename="?([^"]+)"?/);
       const filename = match ? match[1] : 'output.mp4';
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
       URL.revokeObjectURL(url);
+      finishProgress(true, 'İşlendi! İndirme başladı.');
+      if (warning) msg.innerHTML = '<div class="warning">' + warning + '</div>';
+      setTimeout(resetProgress, 4000);
     } else {
       const data = await res.json();
+      finishProgress(false, 'Bir hata oluştu.');
       msg.innerHTML = '<div class="error-box">' + (data.error || 'Hata oluştu') + '</div>';
+      setTimeout(resetProgress, 5000);
     }
   } catch(err) {
+    finishProgress(false, 'Bağlantı hatası.');
     msg.innerHTML = '<div class="error-box">Bağlantı hatası: ' + err.message + '</div>';
+    setTimeout(resetProgress, 5000);
   } finally {
     btn.disabled = false;
-    status.style.display = 'none';
   }
 };
 </script>
