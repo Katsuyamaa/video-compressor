@@ -225,7 +225,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .row { display: flex; gap: 12px; }
   .row .group { flex: 1; }
   label { display: block; font-size: 0.875rem; font-weight: 600; margin-bottom: 6px; }
-  input[type=file], input[type=number], input[type=text], select {
+  input[type=file], input[type=number], select {
     width: 100%; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 6px;
     font-size: 0.9rem; background: #fff;
   }
@@ -244,6 +244,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .warning { background: #fef9c3; border: 1px solid #fbbf24; border-radius: 6px; padding: 12px; margin-top: 16px; font-size: 0.875rem; }
   .error-box { background: #fee2e2; border: 1px solid #f87171; border-radius: 6px; padding: 12px; margin-top: 16px; font-size: 0.875rem; }
   .dimmed { opacity: 0.4; pointer-events: none; }
+  #preview { display: none; width: 100%; border-radius: 6px; margin-top: 8px; max-height: 300px; background: #000; }
+  #trimCanvas { display: none; width: 100%; height: 60px; border-radius: 6px; margin-top: 8px; cursor: col-resize; user-select: none; }
+  #trimInfo { display: none; font-size: 0.8rem; color: #4b5563; margin-top: 4px; text-align: center; }
 </style>
 </head>
 <body>
@@ -252,20 +255,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
   <div class="group">
     <label>Video Dosyası</label>
-    <input type="file" id="video" accept="video/*" required>
+    <input type="file" id="videoFile" accept="video/*" required>
   </div>
 
+  <video id="preview" controls></video>
+
   <div class="section-title">Kırpma</div>
-  <div class="row">
-    <div class="group">
-      <label>Başlangıç</label>
-      <input type="text" id="start_time" placeholder="00:00:00">
-    </div>
-    <div class="group">
-      <label>Bitiş</label>
-      <input type="text" id="end_time" placeholder="00:00:00">
-    </div>
-  </div>
+  <canvas id="trimCanvas"></canvas>
+  <div id="trimInfo">Başlangıç: 0:00 | Bitiş: 0:00 | Seçili: 0:00</div>
+  <input type="hidden" id="start_time" name="start_time" value="">
+  <input type="hidden" id="end_time" name="end_time" value="">
 
   <div class="section-title">Görüntü</div>
   <div class="group">
@@ -319,10 +318,159 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <div id="msg"></div>
 
 <script>
+// ── State ──────────────────────────────────────────────────────────────────
+let startPct = 0;
+let endPct = 1;
+let dragging = null;
+let thumbImgData = null;
+let prevObjectURL = null;
+
+const THUMB_COUNT = 20;
+const HANDLE_R = 10;
+const MIN_GAP = 0.02;
+
+// ── Elements ───────────────────────────────────────────────────────────────
+const videoEl = document.getElementById('preview');
+const canvas = document.getElementById('trimCanvas');
+const ctx = canvas.getContext('2d');
+const trimInfo = document.getElementById('trimInfo');
+
+// ── Time helpers ───────────────────────────────────────────────────────────
+function fmtTime(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return m + ':' + String(sec).padStart(2, '0');
+}
+
+function secsToHHMMSS(s) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+}
+
+// ── UI updates ─────────────────────────────────────────────────────────────
+function updateInfoBar() {
+  const dur = videoEl.duration || 0;
+  const s = startPct * dur;
+  const e = endPct * dur;
+  trimInfo.textContent = 'Başlangıç: ' + fmtTime(s) + ' | Bitiş: ' + fmtTime(e) + ' | Seçili: ' + fmtTime(e - s);
+}
+
+function updateHiddenInputs() {
+  const dur = videoEl.duration || 0;
+  document.getElementById('start_time').value = startPct <= 0.001 ? '' : secsToHHMMSS(startPct * dur);
+  document.getElementById('end_time').value   = endPct   >= 0.999 ? '' : secsToHHMMSS(endPct * dur);
+}
+
+// ── Canvas drawing ─────────────────────────────────────────────────────────
+function drawHandles() {
+  const cw = canvas.width;
+  const ch = canvas.height;
+  const sx = Math.round(startPct * cw);
+  const ex = Math.round(endPct * cw);
+
+  if (thumbImgData) ctx.putImageData(thumbImgData, 0, 0);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(0, 0, sx, ch);
+  ctx.fillRect(ex, 0, cw - ex, ch);
+
+  ctx.strokeStyle = '#2563eb';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(sx + 1, 1, ex - sx - 2, ch - 2);
+
+  ctx.fillStyle = '#2563eb';
+  ctx.fillRect(sx - 3, 0, 6, ch);
+  ctx.beginPath(); ctx.arc(sx, ch / 2, HANDLE_R, 0, Math.PI * 2); ctx.fill();
+  ctx.fillRect(ex - 3, 0, 6, ch);
+  ctx.beginPath(); ctx.arc(ex, ch / 2, HANDLE_R, 0, Math.PI * 2); ctx.fill();
+}
+
+// ── Thumbnail generation ───────────────────────────────────────────────────
+function generateThumbnails() {
+  const cw = canvas.width;
+  const ch = canvas.height;
+  const dur = videoEl.duration;
+  const fw = cw / THUMB_COUNT;
+  let i = 0;
+  thumbImgData = null;
+  ctx.clearRect(0, 0, cw, ch);
+
+  function next() {
+    if (i >= THUMB_COUNT) {
+      thumbImgData = ctx.getImageData(0, 0, cw, ch);
+      drawHandles();
+      updateInfoBar();
+      updateHiddenInputs();
+      return;
+    }
+    function onSeeked() {
+      videoEl.removeEventListener('seeked', onSeeked);
+      ctx.drawImage(videoEl, Math.round(i * fw), 0, Math.ceil(fw), ch);
+      i++;
+      next();
+    }
+    videoEl.addEventListener('seeked', onSeeked);
+    videoEl.currentTime = (i + 0.5) * dur / THUMB_COUNT;
+  }
+  next();
+}
+
+// ── File input ─────────────────────────────────────────────────────────────
+document.getElementById('videoFile').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file) return;
+  if (prevObjectURL) URL.revokeObjectURL(prevObjectURL);
+  prevObjectURL = URL.createObjectURL(file);
+
+  startPct = 0; endPct = 1; dragging = null; thumbImgData = null;
+
+  videoEl.src = prevObjectURL;
+  videoEl.style.display = 'block';
+
+  videoEl.addEventListener('loadedmetadata', function onMeta() {
+    videoEl.removeEventListener('loadedmetadata', onMeta);
+    canvas.width = Math.round(canvas.getBoundingClientRect().width);
+    canvas.style.display = 'block';
+    trimInfo.style.display = 'block';
+    generateThumbnails();
+  });
+});
+
+// ── Drag ───────────────────────────────────────────────────────────────────
+function canvasX(e) {
+  const r = canvas.getBoundingClientRect();
+  return (e.clientX - r.left) * (canvas.width / r.width);
+}
+
+canvas.addEventListener('mousedown', function(e) {
+  const x = canvasX(e);
+  const sx = startPct * canvas.width;
+  const ex = endPct * canvas.width;
+  if (Math.abs(x - sx) <= HANDLE_R * 2) dragging = 'left';
+  else if (Math.abs(x - ex) <= HANDLE_R * 2) dragging = 'right';
+});
+
+canvas.addEventListener('mousemove', function(e) {
+  if (!dragging) return;
+  const pct = Math.max(0, Math.min(1, canvasX(e) / canvas.width));
+  if (dragging === 'left') startPct = Math.min(pct, endPct - MIN_GAP);
+  else endPct = Math.max(pct, startPct + MIN_GAP);
+  videoEl.currentTime = (dragging === 'left' ? startPct : endPct) * videoEl.duration;
+  drawHandles();
+  updateInfoBar();
+  updateHiddenInputs();
+});
+
+document.addEventListener('mouseup', function() { dragging = null; });
+
+// ── Volume toggle ──────────────────────────────────────────────────────────
 function toggleVol(muted) {
   document.getElementById('volGroup').classList.toggle('dimmed', muted);
 }
 
+// ── Form submit ────────────────────────────────────────────────────────────
 document.getElementById('form').onsubmit = async function(e) {
   e.preventDefault();
   const btn = document.getElementById('btn');
@@ -333,14 +481,14 @@ document.getElementById('form').onsubmit = async function(e) {
   status.style.display = 'block';
 
   const fd = new FormData();
-  fd.append('video', document.getElementById('video').files[0]);
-  fd.append('start_time', document.getElementById('start_time').value);
-  fd.append('end_time', document.getElementById('end_time').value);
-  fd.append('resolution', document.getElementById('resolution').value);
+  fd.append('video',         document.getElementById('videoFile').files[0]);
+  fd.append('start_time',    document.getElementById('start_time').value);
+  fd.append('end_time',      document.getElementById('end_time').value);
+  fd.append('resolution',    document.getElementById('resolution').value);
   if (document.getElementById('mute').checked) fd.append('mute', 'on');
-  fd.append('volume', document.getElementById('volume').value);
-  fd.append('target_mb', document.getElementById('target_mb').value);
-  fd.append('min_crf', document.getElementById('min_crf').value);
+  fd.append('volume',        document.getElementById('volume').value);
+  fd.append('target_mb',     document.getElementById('target_mb').value);
+  fd.append('min_crf',       document.getElementById('min_crf').value);
   fd.append('output_format', document.getElementById('output_format').value);
 
   try {
