@@ -217,105 +217,302 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Video İşleyici</title>
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: system-ui, sans-serif; max-width: 580px; margin: 48px auto; padding: 0 20px; color: #1a1a1a; }
-  h1 { font-size: 1.5rem; margin-bottom: 24px; }
-  .section-title { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; margin: 20px 0 10px; border-top: 1px solid #e5e7eb; padding-top: 16px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #f1f5f9;
+    min-height: 100vh;
+    padding: 40px 16px 60px;
+    color: #0f172a;
+  }
+  .card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 8px 24px rgba(0,0,0,.06);
+    max-width: 600px;
+    margin: 0 auto;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 28px 32px 24px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  h1 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #0f172a;
+  }
+  h1 span { color: #3b82f6; }
+  .card-body { padding: 24px 32px 32px; }
+
+  .section {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 12px;
+  }
+  .section-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-bottom: 14px;
+  }
   .group { margin-bottom: 14px; }
+  .group:last-child { margin-bottom: 0; }
   .row { display: flex; gap: 12px; }
   .row .group { flex: 1; }
-  label { display: block; font-size: 0.875rem; font-weight: 600; margin-bottom: 6px; }
-  input[type=file], input[type=number], select {
-    width: 100%; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 6px;
-    font-size: 0.9rem; background: #fff;
+
+  label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 6px;
   }
-  input[type=range] { width: 100%; accent-color: #2563eb; }
-  input[type=checkbox] { width: 16px; height: 16px; margin-right: 6px; cursor: pointer; accent-color: #2563eb; }
-  .check-label { display: flex; align-items: center; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
-  .scale-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: #6b7280; margin-top: 2px; }
-  button {
-    width: 100%; padding: 12px; background: #2563eb; color: #fff;
-    border: none; border-radius: 6px; font-size: 1rem; font-weight: 600;
-    cursor: pointer; transition: background 0.2s; margin-top: 8px;
+  label .val {
+    font-weight: 700;
+    color: #3b82f6;
   }
-  button:hover:not(:disabled) { background: #1d4ed8; }
-  button:disabled { background: #93c5fd; cursor: not-allowed; }
-  .status { text-align: center; margin-top: 14px; font-size: 0.9rem; color: #4b5563; display: none; }
-  .warning { background: #fef9c3; border: 1px solid #fbbf24; border-radius: 6px; padding: 12px; margin-top: 16px; font-size: 0.875rem; }
-  .error-box { background: #fee2e2; border: 1px solid #f87171; border-radius: 6px; padding: 12px; margin-top: 16px; font-size: 0.875rem; }
-  .dimmed { opacity: 0.4; pointer-events: none; }
-  #preview { display: none; width: 100%; border-radius: 6px; margin-top: 8px; max-height: 300px; background: #000; }
-  #trimCanvas { display: none; width: 100%; height: 60px; border-radius: 6px; margin-top: 8px; cursor: col-resize; user-select: none; }
-  #trimInfo { display: none; font-size: 0.8rem; color: #4b5563; margin-top: 4px; text-align: center; }
+
+  input[type=file] {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px dashed #cbd5e1;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    background: #fff;
+    color: #475569;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  input[type=file]:hover { border-color: #3b82f6; }
+
+  input[type=number], select {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    background: #fff;
+    color: #0f172a;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    appearance: none;
+  }
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+  }
+  input[type=number]:focus, select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+  }
+
+  input[type=range] { width: 100%; accent-color: #3b82f6; cursor: pointer; }
+  .scale-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    color: #94a3b8;
+    margin-top: 4px;
+  }
+
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .check-row:hover { border-color: #3b82f6; }
+  input[type=checkbox] {
+    width: 16px; height: 16px;
+    accent-color: #3b82f6;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .check-row span { font-size: 0.875rem; font-weight: 500; color: #374151; }
+
+  #preview {
+    display: none;
+    width: 100%;
+    border-radius: 10px;
+    margin-top: 12px;
+    max-height: 280px;
+    background: #0f172a;
+  }
+  #trimCanvas {
+    display: none;
+    width: 100%;
+    height: 64px;
+    border-radius: 8px;
+    margin-top: 12px;
+    cursor: col-resize;
+    user-select: none;
+    box-shadow: 0 1px 4px rgba(0,0,0,.12);
+  }
+  #trimInfo {
+    display: none;
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-top: 8px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+
+  .dimmed { opacity: 0.35; pointer-events: none; transition: opacity 0.2s; }
+
+  .submit-wrap { margin-top: 20px; }
+  button[type=submit] {
+    width: 100%;
+    padding: 14px;
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: -0.01em;
+    transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+    box-shadow: 0 2px 8px rgba(59,130,246,.35);
+  }
+  button[type=submit]:hover:not(:disabled) {
+    background: #2563eb;
+    box-shadow: 0 4px 16px rgba(59,130,246,.4);
+    transform: translateY(-1px);
+  }
+  button[type=submit]:active:not(:disabled) { transform: translateY(0); }
+  button[type=submit]:disabled { background: #bfdbfe; box-shadow: none; cursor: not-allowed; }
+
+  .status {
+    text-align: center;
+    margin-top: 14px;
+    font-size: 0.875rem;
+    color: #64748b;
+    display: none;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+  .warning {
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 14px;
+    font-size: 0.85rem;
+    color: #92400e;
+  }
+  .error-box {
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 14px;
+    font-size: 0.85rem;
+    color: #991b1b;
+  }
 </style>
 </head>
 <body>
-<h1>Video İşleyici</h1>
-<form id="form">
-
-  <div class="group">
-    <label>Video Dosyası</label>
-    <input type="file" id="videoFile" accept="video/*" required>
+<div class="card">
+  <div class="card-header">
+    <h1>Video <span>İşleyici</span></h1>
   </div>
+  <div class="card-body">
+  <form id="form">
 
-  <video id="preview" controls></video>
+    <div class="section">
+      <div class="section-label">Dosya</div>
+      <div class="group">
+        <input type="file" id="videoFile" accept="video/*" required>
+      </div>
+      <video id="preview" controls></video>
+    </div>
 
-  <div class="section-title">Kırpma</div>
-  <canvas id="trimCanvas"></canvas>
-  <div id="trimInfo">Başlangıç: 0:00 | Bitiş: 0:00 | Seçili: 0:00</div>
-  <input type="hidden" id="start_time" name="start_time" value="">
-  <input type="hidden" id="end_time" name="end_time" value="">
+    <div class="section">
+      <div class="section-label">Kırpma</div>
+      <canvas id="trimCanvas"></canvas>
+      <div id="trimInfo">Başlangıç: 0:00 | Bitiş: 0:00 | Seçili: 0:00</div>
+      <input type="hidden" id="start_time" name="start_time" value="">
+      <input type="hidden" id="end_time" name="end_time" value="">
+    </div>
 
-  <div class="section-title">Görüntü</div>
-  <div class="group">
-    <label>Çözünürlük</label>
-    <select id="resolution">
-      <option value="original">Orijinal</option>
-      <option value="1080p">1080p</option>
-      <option value="720p">720p</option>
-      <option value="480p">480p</option>
-      <option value="360p">360p</option>
-    </select>
-  </div>
+    <div class="section">
+      <div class="section-label">Görüntü</div>
+      <div class="group">
+        <label>Çözünürlük</label>
+        <select id="resolution" name="resolution">
+          <option value="original">Orijinal</option>
+          <option value="1080p">1080p</option>
+          <option value="720p">720p</option>
+          <option value="480p">480p</option>
+          <option value="360p">360p</option>
+        </select>
+      </div>
+    </div>
 
-  <div class="section-title">Ses</div>
-  <div class="group">
-    <label class="check-label">
-      <input type="checkbox" id="mute" onchange="toggleVol(this.checked)">
-      Sesi kapat (mute)
-    </label>
-  </div>
-  <div class="group" id="volGroup">
-    <label>Ses Seviyesi: <span id="volVal">100</span>%</label>
-    <input type="range" id="volume" min="0" max="200" value="100"
-           oninput="document.getElementById('volVal').textContent=this.value">
-    <div class="scale-labels"><span>0%</span><span>Orijinal (100%)</span><span>200%</span></div>
-  </div>
+    <div class="section">
+      <div class="section-label">Ses</div>
+      <div class="group">
+        <label class="check-row" for="mute">
+          <input type="checkbox" id="mute" onchange="toggleVol(this.checked)">
+          <span>Sesi kapat (mute)</span>
+        </label>
+      </div>
+      <div class="group" id="volGroup">
+        <label>Ses Seviyesi — <span class="val"><span id="volVal">100</span>%</span></label>
+        <input type="range" id="volume" min="0" max="200" value="100"
+               oninput="document.getElementById('volVal').textContent=this.value">
+        <div class="scale-labels"><span>0%</span><span>Orijinal</span><span>200%</span></div>
+      </div>
+    </div>
 
-  <div class="section-title">Sıkıştırma</div>
-  <div class="group">
-    <label>Hedef Boyut (MB)</label>
-    <input type="number" id="target_mb" min="1" step="0.1" value="50" required>
-  </div>
-  <div class="group">
-    <label>Minimum Kalite — CRF: <span id="crfVal">23</span></label>
-    <input type="range" id="min_crf" min="0" max="51" value="23"
-           oninput="document.getElementById('crfVal').textContent=this.value">
-    <div class="scale-labels"><span>En iyi kalite (0)</span><span>En küçük dosya (51)</span></div>
-  </div>
-  <div class="group">
-    <label>Çıktı Formatı</label>
-    <select id="output_format">
-      <option value="mp4">MP4</option>
-      <option value="mkv">MKV</option>
-      <option value="webm">WebM</option>
-    </select>
-  </div>
+    <div class="section">
+      <div class="section-label">Sıkıştırma</div>
+      <div class="row">
+        <div class="group">
+          <label>Hedef Boyut (MB)</label>
+          <input type="number" id="target_mb" name="target_mb" min="1" step="0.1" value="50" required>
+        </div>
+        <div class="group">
+          <label>Çıktı Formatı</label>
+          <select id="output_format" name="output_format">
+            <option value="mp4">MP4</option>
+            <option value="mkv">MKV</option>
+            <option value="webm">WebM</option>
+          </select>
+        </div>
+      </div>
+      <div class="group">
+        <label>Minimum Kalite — CRF: <span class="val"><span id="crfVal">23</span></span></label>
+        <input type="range" id="min_crf" name="min_crf" min="0" max="51" value="23"
+               oninput="document.getElementById('crfVal').textContent=this.value">
+        <div class="scale-labels"><span>En iyi kalite (0)</span><span>En küçük dosya (51)</span></div>
+      </div>
+    </div>
 
-  <button type="submit" id="btn">İşle ve İndir</button>
-</form>
-<p class="status" id="status">İşleniyor, lütfen bekleyin...</p>
-<div id="msg"></div>
+    <div class="submit-wrap">
+      <button type="submit" id="btn">İşle ve İndir</button>
+    </div>
+
+  </form>
+  <p class="status" id="status">İşleniyor, lütfen bekleyin…</p>
+  <div id="msg"></div>
+  </div>
+</div>
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
