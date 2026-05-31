@@ -33,3 +33,36 @@ def get_video_info(filepath: str) -> dict:
         "duration": float(fmt["duration"]),
         "size_bytes": int(fmt["size"]),
     }
+
+
+def calculate_video_bitrate(
+    target_mb: float,
+    duration_seconds: float,
+    audio_bitrate_kbps: int = 128,
+) -> int:
+    target_bits = target_mb * 8 * 1024 * 1024
+    audio_bits = audio_bitrate_kbps * 1000 * duration_seconds
+    video_bits = target_bits - audio_bits
+    video_bitrate_kbps = int(video_bits / duration_seconds / 1000)
+    return max(video_bitrate_kbps, 50)
+
+
+def select_encoding_params(
+    video_bitrate_kbps: int,
+    min_crf: int,
+    output_format: str,
+) -> dict:
+    import math
+    crf_floor_kbps = int(150 * (2 ** ((51 - min_crf) / 8)))
+
+    if video_bitrate_kbps >= crf_floor_kbps:
+        return {"mode": "bitrate", "bitrate": video_bitrate_kbps}
+    else:
+        return {
+            "mode": "crf",
+            "crf": min_crf,
+            "warning": (
+                f"Hedef boyut çok küçük — kalite sınırı (CRF {min_crf}) devreye girdi. "
+                f"Çıktı dosyası hedeften büyük olabilir."
+            ),
+        }
