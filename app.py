@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 
@@ -298,7 +299,6 @@ def compress():
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 500
     finally:
-        import shutil
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
